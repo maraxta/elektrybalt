@@ -17,7 +17,7 @@ readline.parse_and_bind("tab: complete")
 
 wordParams      = namedtuple('wordParams', ['transcript', 'accent', 'normal', 'morph'])
 wordsFname      = ".home/pi/lisa/Pushkinizer/texts/ahmadulina.utf8.txt"
-accentDictFname = "dict/union1.dawg"
+accentDictFname = "dict/rhyme.dawg"
 inputFname      = "/home/pi/lisa/Pushkinizer/dict/all-forms.utf8.txt"
 
 #гласные
@@ -41,7 +41,8 @@ class Poet() :
       self.helperDict = list()
       # self.accentDict - словарь из библиотеки DAWG, инициализируется объектом типа CompletionDAWG, в функции read...FromFile()
       self.accentDict = CompletionDAWG()
-      self.compReplaces = self.accentDict.compile_replaces(replaces)
+      # загружаем словарь
+      self.loadAccentDict()
 
       
    def __repr__(self) :
@@ -49,17 +50,6 @@ class Poet() :
       #return self.baseDict.__repr__()  + self.revDict.__repr__()
       return "Instance of Poet class consists of " + str(len(self.accentDict)) + " wordforms and " + str(len(self.revDict)) + " reverses." 
      
-   def prettyPrint(self, fm = 0, to = 10) :
-      """ печать нескольких слов (по умолчанию 10), из словаря и их морфологических свойств """
-      i = 0;
-      for w in self.baseDict : 
-         if i >= fm : 
-            print w
-            for e in self.baseDict[w] :
-               print " " + e.__repr__()
-         elif i > to :
-            return
-         i += 1 
       
    def readFromFile(self, fname) :
       """ читаем строки из файла, токенизируем, преобразуем в нижний регистр, автоматически удаляем повторения, сортируем,
@@ -82,15 +72,14 @@ class Poet() :
 
    def loadAccentDict(self, fname = accentDictFname) :
       self.accentDict.load(fname)
-      print 'Done'
+      print 'accent dictionary loaded from file: ' + fname
          
    def setAccent(self, word) : 
       """ Расставляем ударения, Пользуемся внешним словарем. Возвращаем список вариантов. Тупой перебор"""
 
       word = word.strip().lower()
 
-      if u"'" in word :
-         return [word]
+      if u"'" in word : return [word]
 
       # после каждой гласной буквы добавляем знак ударения и ищем слово с словаре accentDict (пока что)
       # к сожалению, методом replace для строки воспользоваться не получится, так как он заменяет все вхождения.
@@ -105,14 +94,41 @@ class Poet() :
             # как всегда, в словаре рифм ищутся перевернутые слова
             if reverse(testword) in self.accentDict :
                result.append(testword)
+      # если словарный поиск не удачен, пытаемся поставить ударение алгоритмически
+      if len(result) == 0 :
+         result = self.setAlgoAccent(word)
+      
+      # увы не повезло
       if len(result) == 0 :
          print u"Не найдено ни одного варианта ударения слова <<" + word + u">>"
-
       return result
-      
+
       # Тест : d.setAccent(u"замок") -> [u"за'мок", u"зам'ок"]
       # ERROR: для сложносочиненных слов увы не работает так как в словаре у них два ударения: а`виастрои'тель
       #        а символ (`) называется гравис, или знак побочного ударения
+
+
+   def setAlgoAccent(self, word) : 
+      # !!! надо переписать, но нет идей
+      # если односложное слово - ставим ударение сами
+      if syllables(word) == 1 :
+         for i in range(0, len(word)) :
+            if word[i] in vowels :   # добавили после гласной символ ударения, вернули слово
+               return [word[0:i+1] + u"'" + word[i+1:]]
+      # если в слове есть ё - ставим ударение сами
+      if u"ё" in word : 
+         return [word.replace(u"ё", u"ё'")]
+      # ERROR - это неправда, !!! если слова заканчивается на -ать, -ять, то там и ударение, 
+      # но пусть будет пока
+      if word.endswith((u"ать", u"ять")) :
+         return [word[:-2] + u"'" + word[-2:]]
+      # и'вый - также кроме милостиливый и юродивый
+      if word.endswith(u"ивый") :
+         return [word[:-3] + u"'" + word[-3:]]
+      
+      # приставки  вы- (вы'гнать),  па:  всегда ударные
+      
+      return [] 
 
    def formatVerse(self, text) :
       """ Печатает переданный текст, вместе с ритмическим рисунком под каждой из строк, например, под
@@ -124,28 +140,61 @@ class Poet() :
           '  _ _ '    _ '  _  ' _       A('__'_'_'_)
           И лучше выдумать не мог
           '  '  _  ' _ _    '  '        b(''_'__'') """
-         
+
+      """uAaAaAaAa
+      aAaAaAaA
+      uaaAaAaAa
+      uAaAaauA
+      a - безударный
+      u - слабоударный, нейтральный
+      A - точно ударный
+
+      verse   =  [string, ]
+      strings =  [aword, (aword2)]
+      aword   =  [word, (word2) ] """
+
       endwords = []
       scheme = []
+      
+      # разбили текст на строки
+      verse = []
+      for l in text.split(u"\n") :
+         # получили список слов строки, добавили весь список очередным элементом verse
+         # type(verse[0]) -> list
+         verse.append(tokenize(l))
+     
+      # имеем список списков слов, теперь каждое слово надо заменить на список его ударных вариантов
+      # так работать не будет но закомментированный код поможет создать verse 
+      # способом list comprehension
+      #for l in verse : 
+      #   for w in l :
+      #      w = self.setAccent(w)
+            
+      verse[:] = [[self.setAccent(w) for w in l] for l in verse]
+      
+      # появившиеся варианты ударений одного слова очень усложняют работу
+      # мo'й дя'дя ca'мыx чe'cтныx  πpa'вил
+      #                   чecтны'x  πpaви'л
+      # имеем 4 варианта
+
+      
       # текст разбили на строки, из каждой строки взяли только последнее слово
       for l in text.split(u"\n") :
          endwords.append(tokenize(l)[-1])   
                
       # расттавили ударения, взяли только первый вариант пока что
       # см. SO How to change element of list in for in loop
-      endwords[:] = [self.setAccent(x)[0] for x in endwords]
+      # endwords[:] = [self.setAccent(x)[0] for x in endwords]
+      #
 
-#      endwords2 = []
-#      for x in endword :
-#         endwords2.append(self.setAccent(x)[0])
-#      for i in range(len(endwords)) :
-#         enwords[i] = self.setAccent(endwords[i])[0]
       
-      
+      # схема стиха - пока список из пустых строк такой же длины как список endwords
       scheme[:] = [u'' for x in endwords]  
       
       curletter = u'A'
 
+      prettyPrint(endwords)
+      
       for i in range(len(endwords)) :
          # если рифма для строки не установлена, маркируем строку буквой curletter
          if scheme[i] == u'' : 
@@ -156,7 +205,6 @@ class Poet() :
             # если строка в списке, то устанавливаем одинаковую букву
             for j in range(i+1, len(endwords)) :    #
                if endwords[j] in currentRhyme : scheme[j] = scheme[i]
-      
    
       return (endwords, scheme)
 
@@ -251,7 +299,7 @@ class Poet() :
    def assonanceRhyme(self, word) :
       # созвучная рифма
       # совпадает гласный ударный звук, но несовпадают заударные согласные
-      # рог - ветерок
+      # рог - ветерок  друг - звук, крик - миг, 
       # брага - шняга..... чёрт
 
       word = word.strip() 
@@ -270,7 +318,7 @@ class Poet() :
       # tails = self.accentDict.similar_keys(reverse(wtail), self.compReplaces)
       # prettyPrint(reverse(tails))
       
-      # строим из данного хвоста другие, заменив безуударные согласные на их.... на дуальные им, короче на те,/
+      # строим из данного хвоста другие, заменив безуударные согласные на их.... на дуальные им, короче на те,
       # что перечислены в consonantsReplaces
       
       tails = [wtail]
@@ -306,8 +354,17 @@ class Poet() :
       # усеченная рифма, частным случаем которой является йотированная рифма,
       # то есть есть лишний согласный звук в одном из рифмующихся слов
       # ERROR: примеру не те почему-то
-      # друг - звук, крик - миг, веторок - мог
+
       return word
+   
+   def phoneticExpand(self, word, have_forms, model) :
+      # все предыдущие функции поиска рифмы (cons... ans.. yotted, etc) основывались на том, что поиск 
+      # простой рифмы выполнялся не для исходного, а для модифицированного слова (например, в исходном слове
+      # редуцировалась гласная)
+      # Причем способы модификации, в общем, были нехитрыми, заменить что-то на что-то
+      # 
+      result = []
+      return result
    
    def poetize(self, seed) :    # versify ?
       # seed - случайная велечина
@@ -318,7 +375,7 @@ class Poet() :
       return seed
 
 def reverse(str) :
-   """ Возвращает строку задом наперед, версия 100500, решение на SOO """
+   """ Возвращает строку задом наперед, версия 100500, решение на SO """
    return str[::-1]
    # return "".join(reversed(s))
 
@@ -418,6 +475,7 @@ def createAccentDictionary(inputFName, outputFName = "new.dawg") :
       doItByHands = []   # тут слова, где никак ударение не ставится
       
       for w in noAccentList :
+         # а есть ли слова с двумя ё?
          if u"ё" in w : 
             accentList.append(reverse(w.replace(u"ё", u"ё'")))
          # односложное слова
@@ -492,7 +550,7 @@ def prettyPrint(x) :
    if isinstance(x, (str, unicode, int, float)) :
       print x
    elif isinstance(x, tuple) :
-      for e in x : print e,
+      for e in x : prettyPrint(e) ,
       else : print
    else:
       try :
