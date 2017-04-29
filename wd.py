@@ -17,7 +17,7 @@ readline.parse_and_bind("tab: complete")
 
 wordParams      = namedtuple('wordParams', ['transcript', 'accent', 'normal', 'morph'])
 wordsFname      = ".home/pi/lisa/Pushkinizer/texts/ahmadulina.utf8.txt"
-accentDictFname = "dict/rhyme.dawg"
+accentDictFname = "dict/union1.dawg"
 inputFname      = "/home/pi/lisa/Pushkinizer/dict/all-forms.utf8.txt"
 
 #гласные
@@ -26,7 +26,6 @@ alphabet  = u"абвгдеёжзийклмнопрстуфхцчшщъыьэюя
 
 # словарь замен заударных глухих и звонких согласных
 consonantReplaces = {u"к":u"г",u"г":u"к",u"ф":u"в",u"в":u"ф",u"ж":u"ш",u"ш":u"ж",u"ч":u"щ",u"щ":u"ч",u"д":u"т",u"т":u"д"}
-
 
 
 
@@ -43,6 +42,8 @@ class Poet() :
       self.accentDict = CompletionDAWG()
       # загружаем словарь
       self.loadAccentDict()
+      # замены для поиска слов (ключей) где вместо Ё стоит Е
+      self.yoReplaces = self.accentDict.compile_replaces({u'е':u'ё'})
 
       
    def __repr__(self) :
@@ -94,6 +95,19 @@ class Poet() :
             # как всегда, в словаре рифм ищутся перевернутые слова
             if reverse(testword) in self.accentDict :
                result.append(testword)
+
+      # словарный поиск неудачен, попытаемся искать слово, предположив, что вместо е где-то стоят ё
+      # используем метод similar_keys класса CompletionDAWG
+      if len(result) == 0 :
+         for i in range(len(word)) :
+            if word[i] in u"е" :    # ударение добавляет только после е. остальное аналогично
+               testword = word[0:i+1] + u"'" + word[i+1:]   
+               # print "проверяем вариант ",   testword
+               # как всегда, в словаре рифм ищутся перевернутые слова
+               result.extend(self.accentDict.similar_keys(reverse(testword), self.yoReplaces))
+         if len(result) != 0 :
+            print u"Слово <<" + testword + u">> найдено при замене Е на Ё"
+            
       # если словарный поиск не удачен, пытаемся поставить ударение алгоритмически
       if len(result) == 0 :
          result = self.setAlgoAccent(word)
@@ -176,6 +190,7 @@ class Poet() :
       # мo'й дя'дя ca'мыx чe'cтныx  πpa'вил
       #                   чecтны'x  πpaви'л
       # имеем 4 варианта
+      return verse
 
       
       # текст разбили на строки, из каждой строки взяли только последнее слово
