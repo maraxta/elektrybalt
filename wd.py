@@ -19,6 +19,7 @@ wordParams      = namedtuple('wordParams', ['transcript', 'accent', 'normal', 'm
 wordsFname      = ".home/pi/lisa/Pushkinizer/texts/ahmadulina.utf8.txt"
 accentDictFname = "dict/union1.dawg"
 inputFname      = "/home/pi/lisa/Pushkinizer/dict/all-forms.utf8.txt"
+accentErrorsFname = "dict/accentErrors.txt"
 
 #гласные
 vowels    = u"еиаоуыюяэё"
@@ -103,8 +104,10 @@ class Poet() :
             if word[i] in u"е" :    # ударение добавляет только после е. остальное аналогично
                testword = word[0:i+1] + u"'" + word[i+1:]   
                # print "проверяем вариант ",   testword
-               # как всегда, в словаре рифм ищутся перевернутые слова
-               result.extend(self.accentDict.similar_keys(reverse(testword), self.yoReplaces))
+               # как всегда, в словаре рифм ищутся перевернутые слова, и на выходе имеем перевернутые слова
+               yoList = self.accentDict.similar_keys(reverse(testword), self.yoReplaces) 
+               result.extend(map(reverse, yoList))
+               
          if len(result) != 0 :
             print u"Слово <<" + testword + u">> найдено при замене Е на Ё"
             
@@ -115,6 +118,11 @@ class Poet() :
       # увы не повезло
       if len(result) == 0 :
          print u"Не найдено ни одного варианта ударения слова <<" + word + u">>"
+         print u"Слово добавлено в файл: ", accentErrorsFname
+         
+         # открываю файл в режиме append, with закроет его автоматически
+         with codecs.open(accentErrorsFname, mode="a", encoding="utf8") as f :
+            f.write(word + u"\n")
       return result
 
       # Тест : d.setAccent(u"замок") -> [u"за'мок", u"зам'ок"]
@@ -124,6 +132,9 @@ class Poet() :
 
    def setAlgoAccent(self, word) : 
       # !!! надо переписать, но нет идей
+      # в нульсложных словах ударений нет
+      if syllables(word) == 0 :
+         return [word]
       # если односложное слово - ставим ударение сами
       if syllables(word) == 1 :
          for i in range(0, len(word)) :
@@ -143,29 +154,91 @@ class Poet() :
       # приставки  вы- (вы'гнать),  па:  всегда ударные
       
       return [] 
+   
+   def rhythmVector(self, text) :
+      """ ритмическая характеристика слова или строки (одной!!! не более). 
+      Бу'ря мгло'ю не'бо кро'ет -> 20202020
+      вихри снежные кружа       -> 2020002
+      то как зверь она завоет   -> 11101020
+      то заплачет как дитя      -> 1020102
+      возможно ударные слоги обозначим 1, ударные - 2, безударные 0 """
+
+      # result - это список возможных ритмических векторов фразы, каждый ритмический вектор - это список чисел от 0 до 2
+      # чаще всего это будет список из 1 элемента
+      result = [] 
+
+      for w in tokenize(text.strip().lower()) :
+         # расставляем ударения, может быть несколько вариантов для слова, это все ООООчень усложняет
+         accented = self.setAccent(w)
+         
+         # то есть если у нас два варианта ударения одного слова, число возможных ритмических векторов удваивается
+         for l in range(len(accented) -1) :
+            result.append(result[0])
+         
+         r = []
+
+         # проверяется только одно ударение, а надо проверять как-то все варианты,
+         # то есть 
+         for e in accented :
+            
+         for l in accented[0] :
+            if l in vowels :
+               r.append(0)
+            if l == u"'" :
+               r[-1] = 2
+         if len(r) == 1 :
+            r[0] = 1
+         # обязательно надо добавить словарную проверку на слабоударные слова (как-то когда то и тп)
+         result.extend(r)
+      return result
+      
+   def rhythmError(self, rhythmVector, rhythmTemplate) :
+      """ арифметика ритмов """
+      # безударный на ударном месте должен давать небольшую ошибку
+      # если:  vec    =   вихри снежные кружа       -> 2020002
+      #    template   = (хорей 4 стопы)                2020202 
+      # то rhytmError =                                0000200 = -2
+      # ударный слог не должен стоять на безуларном месте
+      # но если rvec  = глупый пингви'н робко прячет   20022020
+      # а rtemplate   = (опять хорей)                  20202020
+      # то rhytmError =                                   2       должна превращаться во что то вроде 50
+      # слабоударный слог может стоять на любом месте с небольшой ошибкой
+      #        vec    = то как зверь она завоет   ->   11 10 1020
+      #      template =                                20 20 2020
+      #   rhythmError =                        sum    -11-10-1000
+      # в итоге
+      # vec template
+      # (1, 0) == 1
+      # (1, 2) == 1
+      # (0, 2) == 2
+      # (2, 0) == 50
+      # (x, x) == 0
+      # а затем суммируем по всем членам списка
+      # ничего не понятно
+      
+      if len(rhythmVector) != len(rhythmTemplate) :
+         print u"Размерности вектора и шаблона на равны"
+         return 1000
+      
+      error = 0
+      for i in range(len(rhythmVector)) :
+         e = rhythmVector[i] - rhythmTemplate[i]
+         if     e ==  2 : e = 50
+         elif   e == -2 : e = 2
+         elif   e == -1 : e = 1
+         error += e
+      return error
+
+   
 
    def formatVerse(self, text) :
-      """ Печатает переданный текст, вместе с ритмическим рисунком под каждой из строк, например, под
-          Мой дядя самых честных правил
-           '   ' _  ' _   '   _    ' _  A(''_'_'_'_)
-          Когда не в шутку занемог
-           _  '  '    '  _  _ _ '       b(_'''___')
-          Он уважать себя заставил
-          '  _ _ '    _ '  _  ' _       A('__'_'_'_)
-          И лучше выдумать не мог
-          '  '  _  ' _ _    '  '        b(''_'__'') """
+      """ Печатает переданный текст, вместе с ритмическим рисунком каждой строки, например
+          Мо'й дя'дя са'мых че'стных пра'вил    120202020-A
+          Когда' не' в шу'тку занемо'г          02120002-b
+          О'н уважа'ть себя' заста'вил          100202020-A
+          И' лу'чше вы'думать не' мо'г          12020011-b 
+      """
 
-      """uAaAaAaAa
-      aAaAaAaA
-      uaaAaAaAa
-      uAaAaauA
-      a - безударный
-      u - слабоударный, нейтральный
-      A - точно ударный
-
-      verse   =  [string, ]
-      strings =  [aword, (aword2)]
-      aword   =  [word, (word2) ] """
 
       endwords = []
       scheme = []
@@ -392,14 +465,14 @@ class Poet() :
 def reverse(str) :
    """ Возвращает строку задом наперед, версия 100500, решение на SO """
    return str[::-1]
-   # return "".join(reversed(s))
+   # return "".join(reversed(list(str)))
 
  
 def syllables(word) :
-   """ Возращает количество слогов в слове """
+   """ Возращает количество слогов в слове или фразе """
    v = 0
    for idx in range(len(word)) :
-      if word[idx] in vowels :
+      if word[idx].lower() in vowels :
          v += 1 
    return v
 
