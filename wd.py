@@ -164,33 +164,47 @@ class Poet() :
       возможно ударные слоги обозначим 1, ударные - 2, безударные 0 """
 
       # result - это список возможных ритмических векторов фразы, каждый ритмический вектор - это список чисел от 0 до 2
-      # чаще всего это будет список из 1 элемента
-      result = [] 
+      # чаще всего это будет матрица из одной строки
+      result = [[]] 
 
       for w in tokenize(text.strip().lower()) :
-         # расставляем ударения, может быть несколько вариантов для слова, это все ООООчень усложняет
+         # для каждого слова расставляем ударения, 
+         # может быть несколько вариантов для слова, это все ООООчень усложняет
          accented = self.setAccent(w)
          
          # то есть если у нас два варианта ударения одного слова, число возможных ритмических векторов удваивается
-         for l in range(len(accented) -1) :
-            result.append(result[0])
-         
-         r = []
+         # если три - то утраивается и т.д.
+         if len(accented) > 1 :  
+            tmp = [] + result      # tmp - копия матрицы, куда еще не добавлен ритм текущего слова
+         else :
+            tmp = []
 
-         # проверяется только одно ударение, а надо проверять как-то все варианты,
-         # то есть 
-         for e in accented :
-            
-         for l in accented[0] :
-            if l in vowels :
-               r.append(0)
-            if l == u"'" :
-               r[-1] = 2
-         if len(r) == 1 :
-            r[0] = 1
-         # обязательно надо добавить словарную проверку на слабоударные слова (как-то когда то и тп)
-         result.extend(r)
+         for i in range(len(accented)) :
+            if i > 0 :
+               result.extend(tmp)
+            vec = self.wordRhytmVector(accented[i]) 
+            print "len result" , len(result) 
+            # тут тонкое и опасное место, добавлять ритм текущего слова надо только в конец вновь созданных векторов
+            lr = len(result)
+            for j in range(lr) :
+               print result
+               # добавляем в хвост каждого вектора ритм текущего слова
+               result[j].extend(vec)
+         
       return result
+      
+   def wordRhytmVector(self, accentedWord) :
+       result = []
+       for l in accentedWord :
+            if l in vowels :
+               result.append(0)
+            if l == u"'" :
+               result[-1] = 2
+       # если слово односложное, считаем его слабоударным
+       if len(result) == 1 :
+          result[0] = 1
+       return result
+
       
    def rhythmError(self, rhythmVector, rhythmTemplate) :
       """ арифметика ритмов """
