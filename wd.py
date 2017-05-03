@@ -6,7 +6,7 @@ import codecs
 import re
 import pymorphy2
 from dawg import CompletionDAWG, RecordDAWG
-
+from copy import deepcopy
 
 # вау, чтобы работало автодополнение по нажатию Tab
 # надо только поискать вопрос на SO: How do i add tab completion to python shell
@@ -175,25 +175,28 @@ class Poet() :
          # то есть если у нас два варианта ударения одного слова, число возможных ритмических векторов удваивается
          # если три - то утраивается и т.д.
          if len(accented) > 1 :  
-            tmp = [] + result      # tmp - копия матрицы, куда еще не добавлен ритм текущего слова
-         else :                    # tmp = result  писать нельзя, это будут просто 2 разных слова, ссылающиеся на одну структуру
+            # объяснение почему копировать так на SO "how to clone o copy a list"
+            tmp = deepcopy(result)       # tmp - копия матрицы, куда еще не добавлен ритм текущего слова 
+         else :                          # tmp = result  писать нельзя, это будут просто 2 разных слова, ссылающиеся на одну структуру
             tmp = []
+         print "w= ", w
 
          for i in range(len(accented)) :
             vec = self.wordRhytmVector(accented[i]) 
             fm = 0                 # добавлять ритм текущего слова надо ко всем векторам
             if i > 0 :
                fm = len(result)    # добавлять ритм текущего слова надо только в конец вновь созданных векторов
-               result.extend(tmp)
-            print "len result" , len(result) 
+               result.extend(tmp)  #
+               print "extending result with", tmp
+            # print "len result" , len(result) , "fm = ", fm , "vec =", vec
             # тут тонкое и опасное место, 
             # да тут все опасно и непонятно
              
             for j in range(fm, len(result)) :
-               print result
+               print "len result" , len(result) , "fm = ", fm , "vec =", vec, "i=", i, "j =", j, "accented =" , accented[i], "tmp =", tmp
                # добавляем в хвост НЕ каждого вектора ритм текущего слова
                result[j].extend(vec)
-         
+               print "result " , result         
       return result
       
    def wordRhytmVector(self, accentedWord) :
