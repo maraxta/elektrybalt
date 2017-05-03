@@ -176,19 +176,22 @@ class Poet() :
          # если три - то утраивается и т.д.
          if len(accented) > 1 :  
             tmp = [] + result      # tmp - копия матрицы, куда еще не добавлен ритм текущего слова
-         else :
+         else :                    # tmp = result  писать нельзя, это будут просто 2 разных слова, ссылающиеся на одну структуру
             tmp = []
 
          for i in range(len(accented)) :
-            if i > 0 :
-               result.extend(tmp)
             vec = self.wordRhytmVector(accented[i]) 
+            fm = 0                 # добавлять ритм текущего слова надо ко всем векторам
+            if i > 0 :
+               fm = len(result)    # добавлять ритм текущего слова надо только в конец вновь созданных векторов
+               result.extend(tmp)
             print "len result" , len(result) 
-            # тут тонкое и опасное место, добавлять ритм текущего слова надо только в конец вновь созданных векторов
-            lr = len(result)
-            for j in range(lr) :
+            # тут тонкое и опасное место, 
+            # да тут все опасно и непонятно
+             
+            for j in range(fm, len(result)) :
                print result
-               # добавляем в хвост каждого вектора ритм текущего слова
+               # добавляем в хвост НЕ каждого вектора ритм текущего слова
                result[j].extend(vec)
          
       return result
