@@ -34,12 +34,7 @@ class Poet() :
    """eletric poet, nothing special"""
 
    def __init__(self) :
-      self.baseDict = defaultdict(list)
-      self.baseDict[u'строка'].append(wordParams(u'страка', -1, u'страка', 'NOUN, inan, femn sign, nomn'))
-      self.revDict = list()
-      self.revDict.append(reverse(u'строка'))
-      self.helperDict = list()
-      # self.accentDict - словарь из библиотеки DAWG, инициализируется объектом типа CompletionDAWG, в функции read...FromFile()
+      # self.accentDict - словарь из библиотеки DAWG, инициализируется объектом типа CompletionDAWG
       self.accentDict = CompletionDAWG()
       # загружаем словарь
       self.loadAccentDict()
@@ -53,31 +48,12 @@ class Poet() :
       return "Instance of Poet class consists of " + str(len(self.accentDict)) + " wordforms and " + str(len(self.revDict)) + " reverses." 
      
       
-   def readFromFile(self, fname) :
-      """ читаем строки из файла, токенизируем, преобразуем в нижний регистр, автоматически удаляем повторения, сортируем,
-          выкидываем всё, что не слова (то есть  4тверка это не слово, но whoisкто - пока что слово) """
-      s = set()
-      with codecs.open(fname, encoding="utf8") as f :
-         for l in f :
-            s.update(map(unicode.lower, filter(unicode.isalpha, tokenize(l))))
-      self.helperDict = list(s)
-      s.clear()
-      self.helperDict.sort()
-   
-   def addMorphInfo(self) :
-      """ Добавляем морфологическую информацию к слову из opencorpora """
-      ma = pymorphy2.MorphAnalyzer()
-      for e in self.helperDict :
-         res = ma.parse(e)
-         for el in res :
-            self.baseDict[e].append(wordParams(u'', 0, el.normal_form, el.tag))
-
    def loadAccentDict(self, fname = accentDictFname) :
       self.accentDict.load(fname)
       print 'accent dictionary loaded from file: ' + fname
          
    def setAccent(self, word) : 
-      """ Расставляем ударения, Пользуемся внешним словарем. Возвращаем список вариантов. Тупой перебор"""
+      """ Расставляем ударения, Пользуемся словарем. Возвращаем список вариантов. Тупой перебор"""
 
       word = word.strip().lower()
 
@@ -151,8 +127,6 @@ class Poet() :
       if word.endswith(u"ивый") :
          return [word[:-3] + u"'" + word[-3:]]
       
-      # приставки  вы- (вы'гнать),  па:  всегда ударные
-      
       return [] 
    
    def rhythmVector(self, text) :
@@ -162,6 +136,9 @@ class Poet() :
       то как зверь она завоет   -> 11101020
       то заплачет как дитя      -> 1020102
       возможно ударные (слабоударные) слоги обозначим 1, ударные - 2, безударные 0 """
+      
+      # вылетаем если получили более одной строки
+      assert u'\n' not in text, "rhythmVector needs single string at input"
 
       # result - это список возможных ритмических векторов фразы (то есть матрица), 
       # каждый ритмический вектор - это список чисел от 0 до 2
@@ -176,7 +153,7 @@ class Poet() :
          # то есть если в стихе два варианта ударения одного слова, число возможных ритмических векторов удваивается
          # если три - то утраивается и т.д.
          if len(accented) > 1 :  
-            # объяснение почему копировать так на SO "how to clone a copy of list"
+            # объяснение почему копировать так на SO "how to clone a list"
             tmp = deepcopy(result)       # tmp - копия матрицы, куда еще не добавлен ритм текущего слова 
          else :                          # tmp = result  писать нельзя, это будут просто 2 разных слова, ссылающиеся на одну структуру
             tmp = []
@@ -197,20 +174,21 @@ class Poet() :
                # print "len result" , len(result) , "fm = ", fm , "vec =", vec, "i=", i, "j =", j, "accented =" , accented[i], "tmp =", tmp
                # добавляем в хвост НЕ каждого вектора ритм текущего слова
                result[j].extend(vec)
-               # print "result " , result         
+               # print "result " , result
       return result
       
    def wordRhytmVector(self, accentedWord) :
-       result = []
-       for l in accentedWord :
-            if l in vowels :
-               result.append(0)
-            if l == u"'" :
-               result[-1] = 2
-       # если слово односложное, считаем его слабоударным
-       if len(result) == 1 :
-          result[0] = 1
-       return result
+      """ заменяем ударные слоги единственного слова на 2, неударные на 0 """
+      result = []
+      for l in accentedWord :
+         if l in vowels :
+            result.append(0)
+         if l == u"'" :
+            result[-1] = 2
+      # если слово односложное, считаем его слабоударным
+      if len(result) == 1 :
+         result[0] = 1
+      return result
 
       
    def rhythmError(self, rhythmVector, rhythmTemplate) :
@@ -219,7 +197,7 @@ class Poet() :
       # если:  vec    =   вихри снежные кружа       -> 2 0 2 0 0 0 2
       #    template   = (хорей 4 стопы)                2 0 2 0 2 0 2 
       # то rhytmError = (отнимаем поразрядно)          0 0 0 0-2 0 0 = -2
-      # ударный слог не должен стоять на безуларном месте
+      # САМОЕ ГЛАВНОЕ ударный слог не должен стоять на безударном месте
       # но если rvec  = глупый пингви'н робко прячет   2 0 0 2 2 0 2 0
       # а rtemplate   = (опять хорей, пять стоп)       2 0 2 0 2 0 2 0
       # то rhytmError =                                0 0 0 2 0 0 0 0   должна превращаться во что то вроде 50
@@ -227,17 +205,17 @@ class Poet() :
       #        vec    = то как зверь она завоет   ->   1 1 1 0 1 0 2 0
       #      template =                                2 0 2 0 2 0 2 0
       #   rhythmError =                        sum    -1 1-1 0-1 0 0 0
-      # в итоге
-      # vec template
-      # (1, 0) == 1
-      # (1, 2) == 1
-      # (0, 2) == 2
-      # (2, 0) == 50
-      # (x, x) == 0
+      # в итоге, получается такая арифметика:
+      # vec template error
+      # (1, 0)      == 1
+      # (1, 2)      == 1
+      # (0, 2)      == 2
+      # (2, 0)      == 50
+      # (x, x)      == 0
       # а затем суммируем по всем членам списка
       
       if len(rhythmVector) != len(rhythmTemplate) :
-         print u"Размерности вектора и шаблона на равны"
+         print u"Размерности вектора и шаблона не равны"
          return 1000
       
       error = 0
@@ -254,24 +232,28 @@ class Poet() :
       # первая задача оперделить стихотворный размер переданных (foot)  строк
       # для этого считаем сколько слогов в строке, затем строим вектора метров, которые подходят по числу слогов
       # например, если в строке 9 слогов - возможно это 4 стопный ямб с женской рифмой
-      # или пятистопный хорей с мужской рифмой рифмой
+      # или пятистопный хорей с мужской рифмой 
       # или любой из 3-х стопных размеров
       # затем выбираем наиболее подходящий размер по наименьшему значению ошибки rhythmError
       
      
-      #  Стихотворные размеры (foot): ямб, хорей, дактиль, амфибрахий, анапест Ja, Ch, Dt, Am, An
+      # Стихотворные размеры (foot): ямб, хорей, дактиль, амфибрахий, анапест Ja, Ch, Dt, Am, An
       Ja = [0,2]
       Ch = [2,0]
       Dt = [2,0,0]
       Am = [0,2,0]
       An = [0,0,2]
-      #  Рифмы: Мужская, Женская, Дактилическая (число безударных слогов в конце строки)
-      Rm = [0]
-      Rf = [2, 0]
-      Rd = [2, 0, 0]
+      # Рифмы: Мужская, Женская, Дактилическая (число безударных слогов в конце строки)
+      Rm = 0
+      Rf = 1
+      Rd = 2
 
       # 
-      #  foots = [ (Название, число стоп, рифма, число слогов, [ритмический вектор]) ]
+      # foots = [ (Название, число стоп, рифма, число слогов, [ритмический вектор]) ]
+      # Наша задача, зная длину вектора текущей строки, сгенерировать шаблон такой же длины.
+      # то есть если в строке 8 слогов, то надо сгенерировать шаблон четырехстопного ямба Ja4m с мужской рифмой
+      # и четырехстопного хорея Ch4f с женской 
+      # 
 
    def generateRhythmVector(self, basefoot, number, rhyme):
       result = []
