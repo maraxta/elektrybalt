@@ -15,7 +15,6 @@ import readline
 readline.parse_and_bind("tab: complete")
 
 wordParams      = namedtuple('wordParams', ['transcript', 'accent', 'normal', 'morph'])
-wordsFname      = ".home/pi/lisa/Pushkinizer/texts/ahmadulina.utf8.txt"
 accentDictFname = "dict/union1.dawg"
 inputFname      = "/home/pi/lisa/Pushkinizer/dict/all-forms.utf8.txt"
 accentErrorsFname = "dict/accentErrors.txt"
