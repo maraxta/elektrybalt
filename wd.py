@@ -4,7 +4,6 @@
 from collections import namedtuple, defaultdict, Counter
 import codecs 
 import re
-import pymorphy2
 from dawg import CompletionDAWG, RecordDAWG
 from copy import deepcopy
 
