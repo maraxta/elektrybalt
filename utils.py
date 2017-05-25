@@ -1,46 +1,50 @@
 # 
 # -*- coding: utf8
 
+import dawg, codecs
+from wd import reverse
 
-def unionDAWGS(inFName1, inFName2, outFName) :
-   """ Объединение двух словарей """
-   d1 = CompletionDAWG()
-   d2 = CompletionDAWG()
+inputFname      = "/home/pi/lisa/Pushkinizer/dict/all-forms.utf8.txt"
+
+def unionDAWGS(inDawg, inText, outFName) :
+   """ Объединение , базового акцентурированного словаря (имя inDawg) и 
+   файла с вручную проставленными ударениями, (имя inText)
+   создание нового файла dawg (имя outDawg"""
+   d = dawg.CompletionDAWG()
    
-   print "Read first dawg from file " + inFName1
+   print "Read base dawg from file " + inDawg
    try : 
-      d1.load(inFName1)
+      d.load(inDawg)
    except ValueError :
-      d1 = None
+      d = None
       print "Value Error while loading dawg from file:" +  inFName1
       return
 
-   print "Read second dawg from file " + inFName2
-   try :
-      d2.load(inFName2)
-   except ValueError : 
-      d1 = None
-      d2 = None
-      print "Value Error while loading dawg from file:" +  inFName2
-      return
+   print "Read additional accents from file " + inText
+
+   # читаем текстовый файл в список
+   newWords = []
+   with codecs.open(inText, encoding="utf8") as f:
+      for l in f :
+         s = l.strip()
+         if len(s) != 0 :
+            if u"'" in s :
+               newWords.append(reverse(s))
       
    # записываем первый словарь в список, туда же второй словарь, 
    # из того что получилось, создаем словарь d3
    print "Concatenate 1 and 2"
-   li = d1.keys()
-   li.extend(d2.keys())
-   d3 = CompletionDAWG(li)
+   oldWords = d.keys()
+   oldWords.extend(newWords)
+   
+   newDawg = dawg.CompletionDAWG(oldWords)
    
    # сохраняем его
    print "Save united dawg to file " + outFName   
-   try : 
-      d3.save(outFName)
-   except ValueError : 
-      print "Value Error while loading dawg from file:" +  inFName2
-      d1 = None
-      d2 = None
-      li = None
-      return
+   newDawg.save(outFName)
+   d = None
+   oldWords = None
+   newWords = None
    print "Done"
 
 
