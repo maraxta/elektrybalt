@@ -47,12 +47,6 @@ class Poet() :
       self.Templates  = self.generateRhythmTemplates()
 
       
-   def __repr__(self) :
-      """ печать информации о словаре """
-      #return self.baseDict.__repr__()  + self.revDict.__repr__()
-      return "Instance of Poet class consists of " + str(len(self.accentDict)) + " wordforms and " + str(len(self.revDict)) + " reverses." 
-     
-      
    def loadAccentDict(self, fname = accentDictFname) :
       self.accentDict.load(fname)
       print 'accent dictionary loaded from file: ' + fname
@@ -257,6 +251,7 @@ class Poet() :
       vidx   = 1000
       tidx   = 1000
       
+      # для каждого ритмического вектора 
       for v in range(len(vectors)) :
          for t in range(len(self.Templates[sl])) :
             e = self.rhythmError(vectors[v], self.Templates[sl][t][0])
@@ -268,7 +263,6 @@ class Poet() :
                
       return (sl, error, deepcopy(self.Templates[sl][tidx]), deepcopy(vectors[vidx]))
 
-      
       
    def verseDetector(self, text) :
       result = []
