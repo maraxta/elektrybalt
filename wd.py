@@ -20,7 +20,7 @@ import rlcompleter
 import readline
 readline.parse_and_bind("tab: complete")
 
-accentDictFname = "dict/union4.dawg"
+accentDictFname = "dict/union5.dawg"
 accentErrorsFname = "dict/accentErrors.txt"
 
 #гласные
