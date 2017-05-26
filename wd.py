@@ -1,11 +1,17 @@
 # 
 # -*- coding: utf8
 
-from collections import namedtuple, defaultdict, Counter
+
+# Приветствие и инструкция находжятся в конце файла
+# Запуск python -i wd.py
+
+
 import codecs 
 import re
 from dawg import CompletionDAWG, RecordDAWG
 from copy import deepcopy
+
+
 
 # вау, чтобы работало автодополнение по нажатию Tab
 # надо только поискать вопрос на SO: How do i add tab completion to python shell
@@ -14,8 +20,7 @@ import rlcompleter
 import readline
 readline.parse_and_bind("tab: complete")
 
-wordParams      = namedtuple('wordParams', ['transcript', 'accent', 'normal', 'morph'])
-accentDictFname = "dict/union3.dawg"
+accentDictFname = "dict/union4.dawg"
 accentErrorsFname = "dict/accentErrors.txt"
 
 #гласные
@@ -24,6 +29,7 @@ alphabet  = u"абвгдеёжзийклмнопрстуфхцчшщъыьэюя
 
 # словарь замен заударных глухих и звонких согласных
 consonantReplaces = {u"к":u"г",u"г":u"к",u"ф":u"в",u"в":u"ф",u"ж":u"ш",u"ш":u"ж",u"ч":u"щ",u"щ":u"ч",u"д":u"т",u"т":u"д"}
+
 
 
 
@@ -98,6 +104,8 @@ class Poet() :
          # открываю файл в режиме append, with закроет его автоматически
          with codecs.open(accentErrorsFname, mode="a", encoding="utf8") as f :
             f.write(word + u"\n")
+         # если ударения не найдено, то возвращается неизменное слово
+         result.append(word)
       return result
 
       # Тест : d.setAccent(u"замок") -> [u"за'мок", u"зам'ок"]
@@ -137,7 +145,7 @@ class Poet() :
       возможно ударные (слабоударные) слоги обозначим 1, ударные - 2, безударные 0 """
       
       # вылетаем если получили более одной строки
-      assert u'\n' not in text, "rhythmVectors needs single string at input"
+      assert u'\n' not in text, "rhythmVectors needs single line at input"
 
       # result - это список возможных ритмических векторов фразы (то есть матрица), 
       # каждый ритмический вектор - это список чисел от 0 до 2
@@ -187,6 +195,10 @@ class Poet() :
       # если слово односложное, считаем его слабоударным
       if len(result) == 1 :
          result[0] = 1
+      # если удареный слог не найден, то считаем все слово слабоударным
+      if not u"'" in accentedWord :
+         for i in range(len(result)) :
+            result[i] = 1
       return result
 
       
@@ -228,7 +240,9 @@ class Poet() :
 
 
    def verseDetectBestTemplate(self, str) :
-      """Определяет наиболее подходящий шаблон набора """
+      """Определяет наиболее подходящий шаблон для ритмических векторов одной строки
+      возвращаем кортеж из числа слогов, значение 
+      ошибки, копию лучшего шаблона, копию лучшего вектора"""
       # вылетаем если получили более одной строки
       assert not u"\n" in str , "Function needs single line at input"
       
@@ -239,7 +253,7 @@ class Poet() :
       vectors = self.rhythmVectors(str)
       
       error = 100000
-      # индекс лучшего шаблона
+      # индекс наиболее подходящего вектора и наиболее подходящего шаблона
       vidx   = 1000
       tidx   = 1000
       
@@ -251,86 +265,93 @@ class Poet() :
                error = e
                vidx  = v
                tidx  = t 
-      return (sl, tidx, vidx, error)
+               
+      return (sl, error, deepcopy(self.Templates[sl][tidx]), deepcopy(vectors[vidx]))
 
       
       
    def verseDetector(self, text) :
-      for l in text.strip().split('\n') :
-         (sl, t, v, e) = self.verseDetectBestTemplate(l)
-         print l
-         print u'best vector = ', self.rhythmVectors(l)[v]
-         print u'template    = ', self.Templates[sl][t][0], " error = ", e
-         print u'style :', self.Templates[sl][t][3], u' стопный ', self.Templates[sl][t][1], u', ', self.Templates[sl][t][2]
-   
-      return
+      result = []
+      for li in text.strip().split('\n') :
+         (sl, e, t, v) = self.verseDetectBestTemplate(li)
+         # теперь определив лучшие вектора и шаблон, мы можем расставить ударения, сняв омонимию
+         # кроме того, расставим акценты на тех слабоударных слогах, где шаблоном предписано ударение
+         
+         tmp = []
+         i = 0 
+         for l in li.lower().replace(u"'", u"") :
+            tmp.append(l)
+            if l in vowels :
+               # если позиция слога в векторе ударная, то ставим ударение
+               # print "v[",i,"] = ", v[i]
+               if v[i] == 2 : 
+                  #print "v[",i,"]", v[i]
+                  tmp.append(u"'")
+               # если позиция слога в векторе слабоударная, но шаблон предписывает ставить здесь ударения, 
+               # то ставим
+               elif v[i] == 1 and t[0][i] == 2 :  
+                  #print "v[",i,"]", v[i]
+                  tmp.append(u"'")
+               i = i + 1
 
+         accentedLine = u"".join(tmp)
+         
+         # result это список списков
+         # [[0-исходня строка, 1-строка с ударениями, 2-число слогов, 3-ошибка, 4-шаблон, 5-вектор, 6-тип рифмы]]
+         result.append([li, accentedLine, sl, e, t, v, u' '])  
 
-
-   def formatVerse(self, text) :
-      """ Печатает переданный текст, вместе с ритмическим рисунком каждой строки, например
-          Мо'й дя'дя са'мых че'стных пра'вил    120202020-A
-          Когда' не' в шу'тку занемо'г          02120002-b
-          О'н уважа'ть себя' заста'вил          100202020-A
-          И' лу'чше вы'думать не' мо'г          12020011-b 
-      """
-
-
+      # теперь лучшие вектора и строки собраны, надо определить рифмованные строки
       endwords = []
-      scheme = []
+      scheme = []   
+      for e in result :
+         endwords.append(tokenize(e[1])[-1].lower())  # последнее слово в строке, причем с ударением
+         scheme.append(u"")                   # сколько строк такова и длина списков endwords, scheme
       
-      # разбили текст на строки
-      verse = []
-      for l in text.split(u"\n") :
-         # получили список слов строки, добавили весь список очередным элементом verse
-         # type(verse[0]) -> list
-         verse.append(tokenize(l))
-     
-      # имеем список списков слов, теперь каждое слово надо заменить на список его ударных вариантов
-      # так работать не будет но закомментированный код поможет создать verse 
-      # способом list comprehension
-      #for l in verse : 
-      #   for w in l :
-      #      w = self.setAccent(w)
-            
-      verse[:] = [[self.setAccent(w) for w in l] for l in verse]
-      
-      # появившиеся варианты ударений одного слова очень усложняют работу
-      # мo'й дя'дя ca'мыx чe'cтныx  πpa'вил
-      #                   чecтны'x  πpaви'л
-      # имеем 4 варианта
-      return verse
-
-      
-      # текст разбили на строки, из каждой строки взяли только последнее слово
-      for l in text.split(u"\n") :
-         endwords.append(tokenize(l)[-1])   
-               
-      # расттавили ударения, взяли только первый вариант пока что
-      # см. SO How to change element of list in for in loop
-      # endwords[:] = [self.setAccent(x)[0] for x in endwords]
-      #
-
-      
-      # схема стиха - пока список из пустых строк такой же длины как список endwords
-      scheme[:] = [u'' for x in endwords]  
-      
-      curletter = u'A'
-
-      prettyPrint(endwords)
-      
+      curletter = u'a'
+         
       for i in range(len(endwords)) :
          # если рифма для строки не установлена, маркируем строку буквой curletter
          if scheme[i] == u'' : 
             scheme[i] = curletter 
             curletter = unichr(ord(curletter) + 1)  # строим следующую букву
+            # print " Рифма к ", "i = " , i, "endwords[i] = ", endwords[i] 
             currentRhyme = self.simpleRhyme(endwords[i])
-            # проверяем строки, следующие после данной на наличие их в списке рифм 
-            # если строка в списке, то устанавливаем одинаковую букву
+            
+            # проверяем строки, следующие после данной на наличие их последних слов в списке рифм 
+            # если слово в списке, то устанавливаем одинаковую букву
             for j in range(i+1, len(endwords)) :    #
-               if endwords[j] in currentRhyme : scheme[j] = scheme[i]
-   
-      return (endwords, scheme)
+               if endwords[j] in currentRhyme : 
+                  scheme[j] = scheme[i]
+      # рифмы найдены, осталось занести их в result, предварительно поделив на мужскую (a) женскую (A) дактилическую (_A)
+      for i in range(len(endwords)) :
+         # проверяем что написано в описании шаблона
+         if u"женская" in result[i][4][2] :
+            scheme[i] = scheme[i].upper()
+            result[i][6] = scheme[i].upper()
+         elif u"дакт"  in result[i][4][2] :
+            scheme[i] = u"_" + scheme[i].upper()
+            result[i][6] = u"_" + scheme[i].upper()
+         else  : # мужская
+            result[i][6] = scheme[i]
+      
+      # пробуем красиво напечатать result
+      print u'Введенный текст'
+      print '-----------------------------------'
+      print text
+      print '-----------------------------------'
+      sumError = 0
+      for e in result :
+         print e[1].ljust(40), 'vec = ', e[5], ', error = ', e[3]
+         print u''. ljust(40), 'temp= ', e[4][0]
+         sumError += e[3]  # суммарная ошибка по всем строкам
+      print '-----------------------------------'
+      print u'Рифма   ', "".join(scheme)
+      print u'Размер  ', result[0][4][3], u'-x стопный ', result[0][4][1]
+      print u'Суммарная ошибка: ', sumError
+      print '-----------------------------------'      
+      
+      return
+
 
    
    def simpleRhyme(self, word) :
@@ -343,10 +364,8 @@ class Poet() :
       # наконец-то появилась ясность с богатой рифмой. кроме заударных звуков должен совпадать и предударный согласный
       # то есть правил-заставил небогатая рифма, а сталь-деталь - богатая
 
-      # от слова бараба'нщик берем максимальное подслово - бараба'нщик и ищем все слова, оканчивающиеся на
-      # данное подслово, получаем (условно) лучшую рифму
-      # затем берем подслово араба'нщик и опять ищем все слова, оканчивающиеся на данное подслово
-      # так поступаем до подслова а'нщик 
+      # от слова бараба'нщик берем подслово - а'нщик и ищем все слова, оканчивающиеся на
+      # данное подслово, получаем рифму
       # функция self.accentDict.keys("строка") автоматически ищет в словаре рифм (инверсионный словарь) 
       # все ключи, включающие в себя заданную строку
       
@@ -371,17 +390,15 @@ class Poet() :
          return []
    
       result = []
-      for i in range(idx) :
-         # из слова-перевертыша берем подстроку, начиная с самой длинной и ищем для нее все рифмы
-         # получаем список рифм для данного подслова
-         s = map(reverse, self.accentDict.keys(reverse(word[i:])))
-         # добавляем из s в список result только те рифмы, которых там еще нет
-         for w in s :
-            if not w in result : result.append(w)
-         print "Ищем слова, оканчивающиеся на ", word[i:], ", найдено: ", len(s)
-         # так у нас получается список, в начале которого стоят лучшие рифмы,
-         # осталось удалить из выдачи само слово, которое мы рифмуем
-         if word in result : result.remove(word)
+      # из слова-перевертыша берем подстроку с конца, включая ударную гласную, ищем для нее все рифмы
+      # переворачиваем рифмы
+      s = map(reverse, self.accentDict.keys(reverse(word[idx-1:])))
+      # добавляем из s в список result только те рифмы, которых там еще нет
+      for w in s :
+         if not w in result : result.append(w)
+      # print "Ищем слова, оканчивающиеся на ", word[idx-1:], ", найдено: ", len(s)
+      # осталось удалить из выдачи само слово, которое мы рифмуем
+      if word in result : result.remove(word)
       return result
       
    def yottedRhyme(self, word) :
@@ -657,3 +674,42 @@ def prettyPrint(x) :
       except TypeError :
          print 'TypeError', x
 
+
+
+
+
+
+p=Poet()  # создали экземпляр распознавателя
+
+print u"""--------------------------------------------------------------------------------------------
+Программа распознавания стихотворного размера и рифмы, Поэтический фильтр
+
+Запустить программу можно так: python -i wd.py
+
+затем введите какой-нибудь стих в строку, например, введем стихотворение Афанасия Фета
+"""
+text = u"""Свежеет ветер, меркнет ночь
+А море злей и злей бурлит
+И пена плещет на гранит
+То прянет, то отхлынет прочь"""
+
+print 'text =u"""', text, u'"""'
+
+print u"""Или создайте файл с расширением .py, в который поместите один или несколько стихов.
+Затем импортируйте его директивой import имя_файла (без расширения)
+
+Несколько таких файлов уже создано: eo.py - фрагменты поэмы Евгений Онегин, mishka.py - разные стихи разных стилей
+Теперь Вы можете определять стихотворные размеры и рифмы любых стихов, вызвав функцию
+p.verseDetector(text)
+
+Например, распознаем четверостишие Фета
+p.verseDetector(text)
+"""
+p.verseDetector(text)
+
+print u"""или распознать фрагмент из Онегина, для чего наберите
+import eo
+p.verseDetector(str1)"""
+
+print u"""Удачного распознавания! Завершить работу можно набрав команду quit()
+--------------------------------------------------------------------------------------------"""
