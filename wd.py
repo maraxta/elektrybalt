@@ -20,9 +20,16 @@ import rlcompleter
 import readline
 readline.parse_and_bind("tab: complete")
 
-accentDictFname = "dict/union5.dawg"
-accentErrorsFname = "dict/accentErrors.txt"
 
+# надо определить из какой директории запускается наш модуль
+# чтобы потом находить файлы словарей
+import os
+module_dir = os.path.dirname(os.path.abspath(__file__))
+print 'Dir is ', module_dir
+
+accentDictFname = module_dir + "/dict/union5.dawg"
+accentErrorsFname = module_dir + "/dict/accentErrors.txt"
+ 
 #гласные
 vowels    = u"еиаоуыюяэё"
 alphabet  = u"абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
@@ -48,8 +55,11 @@ class Poet() :
 
       
    def loadAccentDict(self, fname = accentDictFname) :
-      self.accentDict.load(fname)
-      print 'accent dictionary loaded from file: ' + fname
+      try :
+         self.accentDict.load(fname)
+         print 'accent dictionary loaded from file: ' + fname
+      except :
+         print 'accent dictionary NOT loaded, file is: ' + fname
          
    def setAccent(self, word) : 
       """ Расставляем ударения, Пользуемся словарем. Возвращаем список вариантов. Тупой перебор"""
