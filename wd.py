@@ -631,7 +631,7 @@ class Poet() :
       ]
 
       ]
-      print u"Шаблоны размеров созданы"
+      # print u"Шаблоны размеров созданы"
       return templates
 
 def reverse(str) :
